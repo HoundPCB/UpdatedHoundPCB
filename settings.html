@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .sidebar { background: #2c3e50; min-height: 100vh; color: white; position: fixed; width: 200px; }
+        .main-content { margin-left: 200px; padding: 40px; }
+        .nav-link { color: #bdc3c7; cursor: pointer; }
+        .nav-link.active { background: #34495e; color: white; border-left: 4px solid #3498db; }
+        .card { display: none; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .card.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="sidebar pt-3">
+        <h6 class="text-center small text-uppercase text-secondary mb-4">Admin</h6>
+        <nav class="nav flex-column">
+            <a class="nav-link active" onclick="showCard('import-card', this)">Import File</a>
+            {% for c in ['tech', 'town', 'reason', 'service', 'issue', 'diag', 'solution'] %}
+            <a class="nav-link" onclick="showCard('{{c}}-card', this)">{{c|capitalize}}s</a>
+            {% endfor %}
+            <a href="/" class="nav-link text-warning mt-4">← Exit</a>
+        </nav>
+    </div>
+    <div class="main-content">
+        <div id="import-card" class="card active">
+            <div class="card-header bg-primary text-white">Legacy CSV Mapper</div>
+            <div class="card-body">
+                <form action="/import" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="active_tech" id="iT">
+                    <input type="file" name="file" class="form-control mb-3" required>
+                    <button type="submit" class="btn btn-primary" onclick="sT()">Open Column Mapper</button>
+                </form>
+            </div>
+        </div>
+        {% for code, label in [('tech','Tech'),('town','Town'),('reason','Reason'),('service','Service'),('issue','Issue'),('diag','Diag'),('solution','Solution')] %}
+        <div id="{{code}}-card" class="card"><div class="card-header bg-dark text-white d-flex justify-content-between">{{label}}s <button class="btn btn-sm btn-outline-light" onclick="toggleB('{{code}}')">+ Bulk</button></div>
+            <div class="card-body">
+                <div id="bulk-{{code}}" class="d-none mb-3 border p-3 bg-light"><form action="/settings" method="POST"><input type="hidden" name="category" value="{{code}}"><textarea name="bulk_value" class="form-control mb-2" rows="5" placeholder="Paste list..."></textarea><button class="btn btn-sm btn-success">Update List</button></form></div>
+                <input type="text" class="form-control mb-3" placeholder="Search..." onkeyup="fT('t-{{code}}', this)">
+                <div style="max-height: 500px; overflow-y: auto;"><table class="table table-sm table-hover" id="t-{{code}}">
+                    {% for s in settings if s.category == code %}
+                    <tr><td>{{ s.value }}</td><td class="text-end"><a href="/delete_setting/{{s.id}}" class="text-danger">&times;</a></td></tr>
+                    {% endfor %}
+                </table></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <script>
+        function showCard(id, el) { document.querySelectorAll('.card').forEach(c => c.classList.remove('active')); document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active')); document.getElementById(id).classList.add('active'); el.classList.add('active'); }
+        function sT() { document.getElementById('iT').value = localStorage.getItem('savedTech') || 'Admin'; }
+        function toggleB(c) { document.getElementById('bulk-'+c).classList.toggle('d-none'); }
+        function fT(tid, input) { const f = input.value.toLowerCase(); const rows = document.getElementById(tid).getElementsByTagName('tr'); for (let r of rows) { r.style.display = r.innerText.toLowerCase().includes(f) ? "" : "none"; } }
+    </script>
+</body>
+</html>

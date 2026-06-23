@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Call History</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f0f2f5; height: 100vh; overflow: hidden; }
+        .filter-bar { background: #2c3e50; color: white; padding: 12px 20px; }
+        .sidebar { background: white; border-right: 1px solid #ddd; height: calc(100vh - 75px); overflow-y: auto; }
+        .detail-pane { height: calc(100vh - 75px); overflow-y: auto; padding: 30px; }
+        .card { border: none; box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.05); }
+        .section-title { font-size: 0.8rem; font-weight: 700; color: #4e73df; text-transform: uppercase; border-bottom: 2px solid #e3e6f0; margin-bottom: 1rem; }
+        .label-sm { font-size: 0.7rem; font-weight: 700; color: #858796; }
+        .data-box { background: #f8f9fc; border: 1px solid #d1d3e2; padding: 8px 12px; border-radius: 4px; font-size: 0.9rem; min-height: 38px; color: #2c3e50; }
+        .flex-row-fit { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+        .list-group-item.active { border-left: 4px solid #4e73df !important; }
+    </style>
+</head>
+<body>
+    <div class="filter-bar shadow-sm">
+        <form action="/history" method="GET" class="row g-2 align-items-end">
+            <div class="col-md-2"><label class="label-sm text-white-50">Tech</label><select name="f_tech" class="form-select form-select-sm"><option value="">All Techs</option>{% for t in techs %}<option value="{{t}}" {% if filters.tech == t %}selected{% endif %}>{{t}}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><label class="label-sm text-white-50">Start Date</label><input type="date" name="f_start" class="form-control form-control-sm" value="{{ filters.start }}"></div>
+            <div class="col-md-2"><label class="label-sm text-white-50">End Date</label><input type="date" name="f_end" class="form-control form-control-sm" value="{{ filters.end }}"></div>
+            <div class="col-md-3"><label class="label-sm text-white-50">Customer / Phone</label><input type="text" name="f_query" class="form-control form-control-sm" placeholder="Search customer or phone" value="{{ filters.query }}"></div>
+            <div class="col-md-3 d-flex gap-1"><button type="submit" class="btn btn-primary btn-sm flex-grow-1">Search</button><a href="/history" class="btn btn-secondary btn-sm">Reset</a><a href="/" class="btn btn-danger btn-sm">Exit</a></div>
+        </form>
+    </div>
+
+    <div class="container-fluid"><div class="row">
+        <div class="col-md-3 sidebar p-0 shadow-sm">
+            <div class="list-group list-group-flush">
+                {% for call in calls %}
+                <a href="/history?f_tech={{filters.tech}}&f_start={{filters.start}}&f_end={{filters.end}}&f_cx={{filters.cx}}&call_id={{call.id}}" class="list-group-item list-group-item-action {% if selected_call.id == call.id %}active{% endif %}">
+                    <div class="d-flex justify-content-between"><small class="fw-bold">{{ call.date }}</small><small class="text-primary">{{ call.tech }}</small></div>
+                    <div class="fw-bold" style="color:{% if call.call_reason == 'AHS Solved' %}red{% elif call.call_reason == 'AHS Tech' %}orange{% elif call.call_reason == 'AHS Billing' %}green{% elif call.call_reason == 'AHS Outage' %}purple{% else %}#2c3e50{% endif %};">{{ call.customer }}</div>
+                    <div style="font-size: 0.75rem; color: #6c757d;">{{ call.phone }}</div>
+                    <div style="font-size: 0.75rem; color: #6c757d;" class="text-truncate">{{ call.issue }}</div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="col-md-9 detail-pane">
+            {% if selected_call %}
+            <div class="card p-4 shadow-sm">
+                <form action="/update_call/{{ selected_call.id }}" method="POST" id="historyUpdateForm" onsubmit="calcDuration()">
+                    <div class="section-title">1. Logistics</div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-2"><label class="label-sm">Date</label><input type="date" name="date" class="form-control form-control-sm" value="{{ selected_call.date }}"></div>
+                        <div class="col-md-2"><label class="label-sm">Start Time</label><input type="time" name="time_start" id="timeStart" class="form-control form-control-sm" value="{{ selected_call.time_start }}" onchange="calcDuration()"></div>
+                        <div class="col-md-2"><label class="label-sm">End Time</label><input type="time" name="time_end" id="timeEnd" class="form-control form-control-sm" value="{{ selected_call.time_end }}" onchange="calcDuration()"></div>
+                        <div class="col-md-2"><label class="label-sm">Duration</label><div class="data-box" id="durationDisplay">{{ selected_call.duration }}</div><input type="hidden" name="duration" id="durationInput" value="{{ selected_call.duration }}"></div>
+                        <div class="col-md-4"><label class="label-sm">Technician</label><div class="data-box fw-bold text-primary">{{ selected_call.tech }}</div></div>
+                    </div>
+
+                    <div class="section-title">2. Customer Details</div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6"><label class="label-sm">Customer Name</label><input type="text" name="customer" class="form-control form-control-sm" value="{{ selected_call.customer }}"></div>
+                        <div class="col-md-3"><label class="label-sm">Phone</label><input type="text" name="phone" class="form-control form-control-sm" value="{{ selected_call.phone }}"></div>
+                        <div class="col-md-3"><label class="label-sm">Town</label><input type="text" name="town" class="form-control form-control-sm" value="{{ selected_call.town }}"></div>
+                    </div>
+
+                    <div class="section-title">3. Incident & Resolution</div>
+                    <div class="flex-row-fit mb-4">
+                        <div><label class="label-sm">Reason</label><input type="text" name="call_reason" class="form-control form-control-sm" value="{{ selected_call.call_reason }}"></div>
+                        <div><label class="label-sm">Service</label><input type="text" name="service" class="form-control form-control-sm" value="{{ selected_call.service }}"></div>
+                        <div><label class="label-sm">Issue</label><input type="text" name="issue" class="form-control form-control-sm" value="{{ selected_call.issue }}"></div>
+                        <div><label class="label-sm">Diagnosis</label><input type="text" name="diag" class="form-control form-control-sm" value="{{ selected_call.diag }}"></div>
+                        <div style="flex-grow: 1;"><label class="label-sm">Solution</label><input type="text" name="solution" class="form-control form-control-sm" value="{{ selected_call.solution }}"></div>
+                        <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                    </div>
+                </form>
+                
+                <div class="section-title">Internal Notes</div>
+                <div class="data-box p-3 bg-white mb-3" style="min-height: 200px; white-space: pre-wrap;">{{ selected_call.call_details }}</div>
+                <form action="/update_call/{{ selected_call.id }}" method="POST">
+                    <textarea name="call_details" class="form-control" rows="6" placeholder="Add new notes..." required></textarea>
+                    <button type="submit" class="btn btn-success btn-sm mt-2">Add Notes</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+    </div></div>
+    <script>
+        function calcDuration() {
+            const start = document.getElementById('timeStart').value;
+            const end = document.getElementById('timeEnd').value;
+            if (start && end) {
+                const startDate = new Date("01/01/2000 " + start);
+                const endDate = new Date("01/01/2000 " + end);
+                let diff = (endDate - startDate) / 1000 / 60;
+                if (diff < 0) diff += 1440;
+                const durationStr = diff + "m";
+                document.getElementById('durationDisplay').innerText = durationStr;
+                document.getElementById('durationInput').value = durationStr;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PCB Support Entry</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', sans-serif; }
+        .card { border: none; box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.05); }
+        .section-title { font-size: 0.85rem; font-weight: 700; color: #4e73df; text-transform: uppercase; border-bottom: 2px solid #e3e6f0; margin-bottom: 1rem; }
+        .form-label { font-size: 0.75rem; font-weight: 600; color: #5a5c69; margin-bottom: 2px; }
+        .w-date { width: 160px; } .w-time { width: 110px; } .w-dur { width: 80px; } .w-tech { width: 180px; }
+        
+        /* Single-row layout for Section 3 */
+        .flex-row-fit { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+        .fit-content { field-sizing: content; min-width: 120px; max-width: 300px; }
+        
+        .history-item { cursor: pointer; transition: 0.2s; border-left: 3px solid transparent; }
+        .history-item:hover { background-color: #f8f9fc; border-left: 3px solid #4e73df; }
+    </style>
+</head>
+<body class="p-4">
+    <div id="identityGate" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; backdrop-filter:blur(4px);">
+        <div class="card p-4 shadow" style="width:400px; margin:15% auto;">
+            <h5 class="text-center mb-3">Login Required</h5>
+            <select id="gateSelect" class="form-select mb-3">
+                <option value="" selected disabled>Select Technician...</option>
+                {% for t in techs %}<option value="{{t.value}}">{{t.value}}</option>{% endfor %}
+            </select>
+            <button class="btn btn-primary w-100" onclick="lockIdentity()">Open Application</button>
+        </div>
+    </div>
+
+    <div class="modal fade" id="historyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modalTitle">Past Call Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="editCall()">Edit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" style="max-width: 1250px;">
+        <nav class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="m-0 fw-bold text-dark">Support Entry <span id="currentUser" class="badge bg-white text-primary border ms-2">...</span></h4>
+            <div class="btn-group shadow-sm">
+                <a class="btn btn-primary active" href="/">New</a>
+                <a class="btn btn-light border" href="/history" onclick="return confirmExit()">History</a>
+                <a class="btn btn-light border text-secondary" href="/settings" onclick="return confirmExit()">Settings</a>
+            </div>
+        </nav>
+
+        <form action="/add" method="POST" id="entryForm" class="card p-4 mb-4">
+            <div class="section-title">1. Logistics</div>
+            <div class="d-flex flex-wrap gap-3 mb-4">
+                <div class="w-date"><label class="form-label">Date</label><input type="date" name="date" id="dateField" class="form-control form-control-sm" required></div>
+                <div class="w-time"><label class="form-label">Start</label><input type="time" name="time_start" id="t1" class="form-control form-control-sm" onchange="calc()" required></div>
+                <div class="w-time"><label class="form-label">End</label><input type="time" name="time_end" id="t2" class="form-control form-control-sm" onchange="calc()" required></div>
+                <div class="w-dur"><label class="form-label">Dur</label><input type="text" name="duration" id="dur" class="form-control form-control-sm bg-light" readonly></div>
+                <div class="w-tech"><label class="form-label">Tech</label><input type="text" name="tech" id="techField" class="form-control form-control-sm bg-light" readonly required></div>
+            </div>
+
+            <div class="section-title">2. Customer</div>
+            <div class="row g-3 mb-4">
+                <div class="col-md-5">
+                    <label class="form-label">Customer Name</label>
+                    <input type="text" name="customer" id="cx" class="form-control form-control-sm" required oninput="lookupHistory()">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Phone</label>
+                    <input type="tel" name="phone" id="phoneField" class="form-control form-control-sm" placeholder="(207) 735-2611" pattern="\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Town</label>
+                    <input list="town_list" name="town" id="townField" class="form-control form-control-sm" placeholder="Search..." required>
+                    <datalist id="town_list">{% for t in towns %}<option value="{{t.value}}">{% endfor %}</datalist>
+                </div>
+            </div>
+
+            <div class="section-title">3. Incident & Resolution</div>
+            <div class="flex-row-fit mb-4">
+                <div><label class="form-label">Reason</label>
+                    <input list="r_l" name="call_reason" class="form-control form-control-sm fit-content" required>
+                    <datalist id="r_l">{% for r in reasons %}<option value="{{r.value}}">{% endfor %}</datalist>
+                </div>
+                <div><label class="form-label">Service</label>
+                    <input list="s_l" name="service" class="form-control form-control-sm fit-content" required>
+                    <datalist id="s_l">{% for s in services %}<option value="{{s.value}}">{% endfor %}</datalist>
+                </div>
+                <div><label class="form-label">Issue</label>
+                    <input list="i_l" name="issue" class="form-control form-control-sm fit-content" required>
+                    <datalist id="i_l">{% for i in issues %}<option value="{{i.value}}">{% endfor %}</datalist>
+                </div>
+                <div><label class="form-label">Diagnosis</label>
+                    <input list="d_l" name="diag" class="form-control form-control-sm fit-content" required>
+                    <datalist id="d_l">{% for d in diags %}<option value="{{d.value}}">{% endfor %}</datalist>
+                </div>
+                <div style="flex-grow: 1;">
+                    <label class="form-label">Solution</label>
+                    <input list="sol_l" name="solution" class="form-control form-control-sm w-100" required>
+                    <datalist id="sol_l">{% for s in solutions %}<option value="{{s.value}}">{% endfor %}</datalist>
+                </div>
+            </div>
+
+            <textarea name="call_details" id="details" class="form-control mb-4" rows="4" placeholder="Log details here..." required></textarea>
+            
+            <div class="d-flex justify-content-between align-items-center border-top pt-4">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="if(confirm('Clear all fields?')) clearDraft(true);">Reset Form</button>
+                <button type="submit" class="btn btn-success px-5 fw-bold" onclick="formSubmitted=true; clearDraft(false);">SAVE CALL RECORD</button>
+            </div>
+        </form>
+
+        <div id="historyPreview" class="card p-4 d-none">
+            <div class="section-title">Previous Customer Calls</div>
+            <div class="list-group list-group-flush" id="historyList"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let isDirty = false; 
+        let formSubmitted = false;
+
+        function lookupHistory() {
+            const name = document.getElementById('cx').value; 
+            saveDraft();
+            if (name.length < 2) { 
+                document.getElementById('historyPreview').classList.add('d-none'); 
+                return; 
+            }
+            
+            fetch(`/api/customer_history?name=${encodeURIComponent(name)}`)
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('historyList'); 
+                    const container = document.getElementById('historyPreview');
+                    list.innerHTML = ""; 
+                    if (data.length > 0) { 
+                        container.classList.remove('d-none');
+                        data.forEach(call => {
+                            const item = document.createElement('div'); 
+                            item.className = "list-group-item history-item d-flex justify-content-between p-2";
+                            item.innerHTML = `<span><strong>${call.date}</strong> - ${call.issue}</span><button class="btn btn-sm btn-link" type="button">Details</button>`;
+                            item.onclick = () => showDetail(call); 
+                            list.appendChild(item);
+                        });
+                    } else container.classList.add('d-none');
+                });
+        }
+
+        let currentCallId = null;
+
+        function showDetail(call) {
+            currentCallId = call.id;
+            document.getElementById('modalTitle').innerText = `${call.date} | ${call.customer}`;
+            document.getElementById('modalBody').innerHTML = `
+                <div class="row mb-3">
+                    <div class="col-4"><strong>Tech:</strong> ${call.tech}</div>
+                    <div class="col-4"><strong>Dur:</strong> ${call.duration}</div>
+                    <div class="col-4"><strong>Town:</strong> ${call.town}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6"><strong>Issue:</strong> ${call.issue}</div>
+                    <div class="col-6"><strong>Reason:</strong> ${call.call_reason}</div>
+                </div>
+                <div class="mb-3 p-3 bg-light border rounded"><strong>Notes:</strong><br>${call.details}</div>
+                <div class="p-2 border-top text-success"><strong>Resolution:</strong> ${call.solution}</div>
+            `;
+            new bootstrap.Modal(document.getElementById('historyModal')).show();
+        }
+
+        function editCall() {
+            if (currentCallId) {
+                window.location.href = `/history?call_id=${currentCallId}`;
+            }
+        }
+
+        function lockIdentity() { 
+            const val = document.getElementById('gateSelect').value; 
+            if(val) { localStorage.setItem('savedTech', val); location.reload(); } 
+        }
+
+        function saveDraft() { 
+            if (formSubmitted) return; 
+            localStorage.setItem('callDraft', JSON.stringify({ 
+                cx: document.getElementById('cx').value, 
+                phone: document.getElementById('phoneField').value,
+                details: document.getElementById('details').value, 
+                town: document.getElementById('townField').value, 
+                t1: document.getElementById('t1').value, 
+                t2: document.getElementById('t2').value 
+            })); 
+            isDirty = true; 
+        }
+
+        function clearDraft(reload) { 
+            localStorage.removeItem('callDraft'); 
+            isDirty = false; 
+            if(reload) location.reload(); 
+        }
+        
+        window.onload = () => {
+            const tech = localStorage.getItem('savedTech'); 
+            if(!tech) document.getElementById('identityGate').style.display = 'block';
+            else { 
+                document.getElementById('techField').value = tech; 
+                document.getElementById('currentUser').innerText = tech; 
+            }
+            document.getElementById('dateField').valueAsDate = new Date();
+            const draft = JSON.parse(localStorage.getItem('callDraft'));
+            if(draft) { 
+                document.getElementById('cx').value = draft.cx || ""; 
+                document.getElementById('phoneField').value = draft.phone || "";
+                document.getElementById('details').value = draft.details || ""; 
+                document.getElementById('townField').value = draft.town || ""; 
+                document.getElementById('t1').value = draft.t1 || ""; 
+                document.getElementById('t2').value = draft.t2 || ""; 
+                calc(); 
+                if(draft.cx) lookupHistory();
+            }
+            document.getElementById('entryForm').addEventListener('input', saveDraft);
+        };
+
+        function confirmExit() { if (isDirty && !formSubmitted) return confirm("Unsaved changes!"); return true; }
+
+        function calc() {
+            const s = document.getElementById('t1').value, e = document.getElementById('t2').value;
+            if(s && e) {
+                const start = new Date("01/01/2000 " + s), end = new Date("01/01/2000 " + e);
+                let diff = (end - start) / 1000 / 60; if(diff < 0) diff += 1440; 
+                document.getElementById('dur').value = diff + "m";
+            }
+        }
+    </script>
+</body>
+</html>
